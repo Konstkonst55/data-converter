@@ -1,0 +1,69 @@
+name: CI
+
+permissions:
+    contents: read
+
+"on":
+    push:
+    pull_request:
+
+jobs:
+    build-and-test:
+        name: Build and test (${{ matrix.os }})
+        runs-on: ${{ matrix.os }}
+        strategy:
+            fail-fast: false
+            matrix:
+                os:
+                    - ubuntu-latest
+                    - macos-latest
+                    - windows-latest
+
+        steps:
+            - name: Check out repository
+              uses: actions/checkout@v4
+
+            - name: Cache CMake dependencies
+              uses: actions/cache@v4
+              with:
+                  path: |
+                      build/_deps/yaml-cpp-src
+                      build/_deps/yaml-cpp-subbuild
+                      build/_deps/googletest-src
+                      build/_deps/googletest-subbuild
+                  key: ${{ runner.os }}-fetchcontent-${{ hashFiles('CMakeLists.txt') }}
+
+            - name: Configure
+              run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DDATACONV_BUILD_TESTS=ON
+
+            - name: Build
+              run: cmake --build build --config Release --parallel 2
+
+            - name: Run tests
+              shell: bash
+              run: |
+                  set -o pipefail
+                  ctest --test-dir build -C Release --output-on-failure 2>&1 | tee "test-results-${{ runner.os }}.txt"
+
+            - name: Prepare application artifact
+              if: always()
+              shell: bash
+              run: |
+                  mkdir -p ci-artifacts
+
+                  for candidate in build/dataconv build/dataconv.exe build/Release/dataconv build/Release/dataconv.exe; do
+                      if [[ -f "$candidate" ]]; then
+                          cp "$candidate" ci-artifacts/
+                          break
+                      fi
+                  done
+
+            - name: Upload CI artifacts
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: ci-artifacts-${{ runner.os }}
+                  path: |
+                      test-results-${{ runner.os }}.txt
+                      ci-artifacts/
+                  if-no-files-found: warn
