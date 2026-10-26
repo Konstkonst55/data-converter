@@ -23,18 +23,23 @@ jobs:
             - name: Check out repository
               uses: actions/checkout@v4
 
-            - name: Cache CMake dependencies
-              uses: actions/cache@v4
+            - name: Restore CMake dependencies cache
+              uses: actions/cache/restore@v4
               with:
-                  path: |
-                      build/_deps/yaml-cpp-src
-                      build/_deps/yaml-cpp-subbuild
-                      build/_deps/googletest-src
-                      build/_deps/googletest-subbuild
+                  path: build/_deps
                   key: ${{ runner.os }}-fetchcontent-${{ hashFiles('CMakeLists.txt') }}
+                  restore-keys: |
+                      ${{ runner.os }}-fetchcontent-
 
             - name: Configure
               run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DDATACONV_BUILD_TESTS=ON
+
+            - name: Save CMake dependencies cache
+              if: success()
+              uses: actions/cache/save@v4
+              with:
+                  path: build/_deps
+                  key: ${{ runner.os }}-fetchcontent-${{ hashFiles('CMakeLists.txt') }}
 
             - name: Build
               run: cmake --build build --config Release --parallel 2
